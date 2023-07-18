@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from time import sleep
+from typing import Tuple
 
 import requests
 import supervisely as sly
@@ -14,14 +15,15 @@ load_dotenv("local.env")
 GLOBAL_TIMEOUT = 1  # seconds
 AGENT_ID = 230  # agent id to run training on
 PROJECT_ID = sly.env.project_id()
+DATASET_ID = sly.env.dataset_id()
 TEAM_ID = sly.env.team_id()
 WORKSPACE_ID = sly.env.workspace_id()
-TASK_TYPE = "object detection"
+TASK_TYPE = "object detection"  # you can choose "instance segmentation" or "pose estimation"
 DATA_DIR = sly.app.get_data_dir()
 image_path = "/Users/almaz/projects/data/test/image.jpeg"
 
 
-def train_model(api: sly.Api) -> Path:
+def train_model(api: sly.Api) -> Tuple[str, str]:
     train_app_name = "supervisely-ecosystem/yolov8/train"
 
     module_id = api.app.get_ecosystem_module_id(train_app_name)
@@ -53,13 +55,43 @@ def train_model(api: sly.Api) -> Path:
 
     sly.logger.info(f"Session started: #{task_id}")
 
+    # 📗 You can set any parameters you want to customize training in the data field
     api.task.send_request(
         task_id,
         "auto_train",
         data={
             "project_id": PROJECT_ID,
+            # "dataset_ids": [DATASET_ID], # optional (specify if you want to train on specific datasets)
             "task_type": TASK_TYPE,
-        },
+            "train_mode": "finetune", # finetune / scratch
+            "n_epochs": 100,
+            "patience": 50,
+            "batch_size": 16,
+            "input_image_size": 640,
+            "optimizer": "AdamW", # AdamW, Adam, SGD, RMSProp
+            "n_workers": 8,
+            "lr0": 0.01,
+            "lrf": 0.01,
+            "momentum": 0.937,
+            "weight_decay": 0.0005,
+            "warmup_epochs": 3.0,
+            "warmup_momentum": 0.8,
+            "warmup_bias_lr": 0.1,
+            "amp": "true",
+            "hsv_h": 0.015,
+            "hsv_s": 0.7,
+            "hsv_v": 0.4,
+            "degrees": 0.0,
+            "translate": 0.1,
+            "scale": 0.5,
+            "shear": 0.0,
+            "perspective": 0.0,
+            "flipud": 0.0,
+            "fliplr": 0.5,
+            "mosaic": 0.0,
+            "mixup": 0.0,
+            "copy_paste": 0.0,
+        }, # 📗 train paramaters
         timeout=10e6,
     )
 
@@ -77,7 +109,7 @@ def train_model(api: sly.Api) -> Path:
 
     requests.post(post_shutdown)
 
-    return team_files_folder, best
+    return str(team_files_folder), best
 
 
 def download_weight(api: sly.Api, remote_weight_path):
@@ -99,9 +131,6 @@ def get_predictions(local_weight_path):
     # Predict on an image
     results = model(image_path)
     class_names = model.names
-
-    # or save as prediction result
-    # model.predict(source, save=True, imgsz=320, conf=0.5)
 
     return results, class_names
 
@@ -141,6 +170,6 @@ if __name__ == "__main__":
         "The weights of trained model, predictions visualization and other training artifacts can be found in the following Team Files folder:"
     )
     best_weight_local = download_weight(api, best_weight)
-    results, class_names = get_predictions(best_weight)
+    results, class_names = get_predictions(best_weight_local)
     new_project = upload_predictions(api, results, class_names, image_path)
     sly.logger.info(f"New project created. ID: {new_project.id}, name: {new_project.name}")
