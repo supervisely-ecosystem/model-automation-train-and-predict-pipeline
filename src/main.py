@@ -26,9 +26,7 @@ DATA_DIR = sly.app.get_data_dir()
 task_type = "object detection"  # you can choose "instance segmentation" or "pose estimation"
 
 
-############################################################
 ##################### PART 1: TRAINING #####################
-############################################################
 
 module_id = api.app.get_ecosystem_module_id(APP_NAME)
 module_info = api.app.get_ecosystem_module_info(module_id)
@@ -120,9 +118,7 @@ sly.logger.info(
 )
 
 
-############################################################
 ############## PART 2: Download model weight ###############
-############################################################
 
 # download best weight from Supervisely Team Files
 weight_name = os.path.basename(best)
@@ -135,13 +131,10 @@ api.file.download(TEAM_ID, best, local_weight_path)
 sly.logger.info(f"Model weight downloaded to {local_weight_path}")
 
 
-############################################################
 ################ PART 3: Perform inference #################
-############################################################
 
 # Load your model
 model = YOLO(local_weight_path)
-
 
 # define device
 device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
@@ -149,7 +142,6 @@ device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
 # load image
 input_image = sly.image.read(image_path)
 input_image = input_image[:, :, ::-1]
-input_height, input_width = input_image.shape[:2]
 
 # Predict on an image
 results = model(
@@ -167,9 +159,7 @@ predictions_plotted = results[0].plot()
 cv2.imwrite(os.path.join(DATA_DIR, "predictions.jpg"), predictions_plotted)
 
 
-############################################################
 ############## PART 4: Upload to Supervisely ###############
-############################################################
 
 # Get class names
 class_names = model.names
