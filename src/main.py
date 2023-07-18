@@ -2,8 +2,10 @@ import os
 from pathlib import Path
 from time import sleep
 
+import cv2
 import requests
 import supervisely as sly
+import torch
 from dotenv import load_dotenv
 from ultralytics import YOLO
 
@@ -66,12 +68,12 @@ api.task.send_request(
         # "dataset_ids": [DATASET_ID], # optional (specify if you want to train on specific datasets)
         "task_type": task_type,
         "model": "YOLOv8n-det",
-        "train_mode": "finetune", # finetune / scratch
+        "train_mode": "finetune",  # finetune / scratch
         "n_epochs": 100,
         "patience": 50,
         "batch_size": 16,
         "input_image_size": 640,
-        "optimizer": "AdamW", # AdamW, Adam, SGD, RMSProp
+        "optimizer": "AdamW",  # AdamW, Adam, SGD, RMSProp
         "n_workers": 8,
         "lr0": 0.01,
         "lrf": 0.01,
@@ -114,7 +116,7 @@ requests.post(post_shutdown)
 
 sly.logger.info("Training completed")
 sly.logger.info(
-    "The weights of trained model, predictions visualization and other training artifacts can be found in the following Team Files folder:"
+    f"The weights of trained model and other artifacts uploaded in Team Files: {str(team_files_folder)}"
 )
 
 
@@ -130,6 +132,7 @@ if sly.fs.dir_exists(weight_dir):
     sly.fs.remove_dir(weight_dir)
 
 api.file.download(TEAM_ID, best, local_weight_path)
+sly.logger.info(f"Model weight downloaded to {local_weight_path}")
 
 
 ############################################################
@@ -139,12 +142,37 @@ api.file.download(TEAM_ID, best, local_weight_path)
 # Load your model
 model = YOLO(local_weight_path)
 
+
+# define device
+device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
+
+# load image
+input_image = sly.image.read(image_path)
+input_image = input_image[:, :, ::-1]
+input_height, input_width = input_image.shape[:2]
+
 # Predict on an image
-results = model(image_path)
+results = model(
+    source=input_image,
+    conf=0.25,
+    iou=0.7,
+    half=False,
+    device=device,
+    max_det=300,
+    agnostic_nms=False,
+)
+
+# visualize predictions
+predictions_plotted = results[0].plot()
+cv2.imwrite(os.path.join(DATA_DIR, "predictions.jpg"), predictions_plotted)
+
+
+############################################################
+############## PART 4: Upload to Supervisely ###############
+############################################################
 
 # Get class names
 class_names = model.names
-
 
 labels = []
 obj_classes = []
@@ -162,15 +190,16 @@ for result in results:
         bbox = sly.Rectangle(top, left, bottom, right)
         labels.append(sly.Label(bbox, obj_class))
 
-############################################################
-############## PART 4: Upload to Supervisely ###############
-############################################################
-
+# Create project, dataset and update project meta
 project = api.project.create(WORKSPACE_ID, "predictions", change_name_if_conflict=True)
 dataset = api.dataset.create(project.id, "dataset")
 api.project.update_meta(project.id, project_meta.to_json())
+
+# Upload image to Supervisely
 image_info = api.image.upload_path(dataset.id, "image.jpeg", image_path)
+
+# Create annotation for image and upload it
 ann = sly.Annotation((image_info.height, image_info.width), labels=labels)
 api.annotation.upload_ann(image_info.id, ann)
 
-sly.logger.info(f"New project created. ID: {project.id}, name: {project.name}")
+sly.logger.info(f"Annotated image (ID:{image_info.id}) uploaded to project (ID:{project.id})")
