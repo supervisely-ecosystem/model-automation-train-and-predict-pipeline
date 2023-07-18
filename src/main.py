@@ -24,6 +24,7 @@ TEAM_ID = sly.env.team_id()
 WORKSPACE_ID = sly.env.workspace_id()
 DATA_DIR = sly.app.get_data_dir()
 task_type = "object detection"  # you can choose "instance segmentation" or "pose estimation"
+image_path = os.path.join("data_dir/test/image3.png") # ⬅️ change value to your image path
 
 
 ##################### PART 1: TRAINING #####################
