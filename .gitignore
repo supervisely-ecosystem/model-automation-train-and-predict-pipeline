@@ -1,0 +1,4 @@
+.venv
+supervisely
+data_dir
+.DS_Store
