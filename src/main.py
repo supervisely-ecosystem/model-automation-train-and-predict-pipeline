@@ -66,7 +66,7 @@ api.task.send_request(
         "project_id": PROJECT_ID,
         # "dataset_ids": [DATASET_ID], # optional (specify if you want to train on specific datasets)
         "task_type": task_type,
-        "model": "YOLOv8n-det",
+        "model": "YOLOv8n-det (COCO)",
         "train_mode": "finetune",  # finetune / scratch
         "n_epochs": 100,
         "patience": 50,
